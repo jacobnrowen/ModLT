@@ -1,0 +1,12 @@
+Signature { a(_) b(_) *(_,_) <(_,_) }
+
+DOM := true
+CSET := 1
+
+LIC(x)(1) := true
+
+a(x)(1) := b(x)
+b(x)(1) := a(x)
+
+*(x,y)(1,1) := x * y
+<(x,y)(1,1) := x < y
