@@ -208,7 +208,7 @@ isValidTDucRelation (TDucRelation _ relMaps) = case relMaps of
             noDuplicates = S.size (S.fromList setMappings) == length setMappings
             
             setMappings = map getSetMapping fmlas
-            topCSet = maximum (map maximum setMappings)
+            topCSet = if not (null setMappings) then maximum (map maximum setMappings) else 1
             
             getSetMapping :: TDucRelMapping -> [Int]
             getSetMapping = fst . mapping

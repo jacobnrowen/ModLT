@@ -17,7 +17,7 @@ import Types (
 %name runTDucParser
 %tokentype { Token }
 
-%error { (\tk -> error ("parse error: " ++ (show tk))) }
+%error { (\tk -> error ("Transduction parse error: " ++ (show tk))) }
 %expect 2  --We expect a couple ambiguities with line separation that should not matter
 
 %token

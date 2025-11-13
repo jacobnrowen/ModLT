@@ -32,7 +32,7 @@ processParsedTDuc pTDuc = (ProcessedTDuc sig dom cset lics rels, recipes)
 
 
 makeTDuc :: ProcessedTDuc -> Transduction
-makeTDuc (ProcessedTDuc sig dom cset lics rels) = 
+makeTDuc (ProcessedTDuc sig dom cset lics rels) =
     if checkValidTransduction tduc then tduc
     else procError "Unspecified transduction processing error"
     where
@@ -247,8 +247,9 @@ checkValidTransduction (Transduction sig dom csize lics rels)
         domMatchesSig = matchesSig dom
         licsMatchSig = all (matchesSig . snd) lics
         relMapsMatchSig = all (all (matchesSig . snd . mapping)) (S.map formulas rels)
-        getTDucRelCSetSize (TDucRelation _ fmlas) = maximum (map maximum setMappings)
+        getTDucRelCSetSize (TDucRelation _ fmlas) = maxCSet
             where
+                maxCSet = if not (null setMappings) then maximum (map maximum setMappings) else 1
                 setMappings = map (fst . mapping) fmlas
 
 checkValidTDucRelation :: TDucRelation -> Bool
@@ -268,15 +269,15 @@ checkValidTDucRelation (TDucRelation rName fmlas@(headFmla:rest))
         mapsDontMatch = any (\relMap -> length (getSetMapping relMap) /= headMapArity) rest
         totalNumWrong = length setMappings /= topCSet ^ headArgArity
         hasDuplicates = S.size (S.fromList setMappings) /= length setMappings
-        
+
         headArgArity = getArgArity headFmla
         headMapArity = length (getSetMapping headFmla)
-        
+
         setMappings = map getSetMapping fmlas
-        topCSet = maximum (map maximum setMappings)
-        
+        topCSet = if not (null setMappings) then maximum (map maximum setMappings) else 1
+
         getSetMapping :: TDucRelMapping -> [Int]
         getSetMapping = fst . mapping
-        
+
         getArgArity :: TDucRelMapping -> Int
         getArgArity = length . relArguments

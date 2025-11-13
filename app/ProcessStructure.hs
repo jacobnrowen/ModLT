@@ -76,7 +76,7 @@ processParsedStrucs (ParsedStrucsFile sig alphaTbl strucs) = ProcessedStrucsFile
         handleFullDef sz rels = Structure sz' rels'
             where
                 sz' = fromMaybe maxDomElem sz
-                maxDomElem = maximum (S.map maximum allRMems)
+                maxDomElem = if S.size allRMems /= 0 then maximum (S.map maximum allRMems) else 0
                 allRMems = foldr S.union S.empty (S.map members rels')
                 rels' = S.fromList (map makeStrucR rels)
                 makeStrucR (nm, rmems) = StrucRelation nm (S.fromList rmems)
@@ -406,7 +406,7 @@ getStructureError (Structure numElem rels) = strucError
                     | invalidElems = "Error: domain element out of size range in relation " ++ nm
                     | otherwise    = ""
                 unequalArity  = any ((/= getArity mems) . length) mems
-                invalidElems  = maximum (S.map maximum mems) > numElem
+                invalidElems  = S.size mems /= 0 && maximum (S.map maximum mems) > numElem
 
 
 strucMatchesSig :: Structure -> Signature -> Bool

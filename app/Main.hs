@@ -9,11 +9,17 @@ import ProcessStructure
 main :: IO ()
 main = do
     args <- getArgs
-    if length args >= 2 then do
-        strucFile <- readFile (head args)
+    let (strucFPath,outFPath,validArgs) = getFirstArgs args
+    if validArgs then do
+        strucFile <- readFile strucFPath
         tducFiles <- mapM readFile (drop 2 args)
         let procdStrucFile = getStrucsFile strucFile
         let tducs = map getTransduction tducFiles
-        writeFile (args!!1) (getResults procdStrucFile tducs)
-    else putStrLn ("Error: modlt requires at least two command line arguments: " ++
+        writeFile outFPath (getResults procdStrucFile tducs)
+    else putStrLn ("Error: ModLT requires at least two command line arguments: " ++
         "a structure input file, an output file path, and one or more transduction files")
+
+getFirstArgs :: [String] -> (String,String,Bool)
+--Check if the first two arguments are present and retrive them if they are
+getFirstArgs (arg0:(arg1:_)) = (arg0,arg1,True)
+getFirstArgs _ = ("","",False)
