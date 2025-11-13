@@ -1,15 +1,16 @@
 module Recipes (applyRecipes) where
 
 import Types
-import Data.Set
+import qualified Data.Set as S
 import qualified Data.Maybe
 import Data.List (find)
+import Control.Monad (replicateM)
 
 procError :: [Char] -> a
 procError msg = error ("Error:\n" ++ msg)
 
 applyRecipes :: [RecipeCall] -> ProcessedTDuc -> ProcessedTDuc
-applyRecipes recNames = Prelude.foldr (.) id (reverse (Prelude.map getRecipe recNames))
+applyRecipes recNames = foldr (.) id (reverse (map getRecipe recNames))
     where
         getRecipe :: RecipeCall -> (ProcessedTDuc -> ProcessedTDuc)
         getRecipe (RecipeCall name args)
@@ -32,35 +33,37 @@ fillTransductionFaithful :: Recipe
 --  the length of the list of licensors must either match the copy set size or be empty
 fillTransductionFaithful _ (ProcessedTDuc sig dom csize mLics mTDucRels) = result
     where
-        result = ProcessedTDuc sig dom csize (Prelude.map Just lics) tducrels
+        result = ProcessedTDuc sig dom csize (map Just lics) tducrels
 
         lics
-            | Prelude.null mLics    = replicate csize ("", LitTrue)
-            | otherwise             = Prelude.map (Data.Maybe.fromMaybe ("",LitTrue)) mLics
+            | null mLics    = replicate csize ("", LitTrue)
+            | otherwise             = map (Data.Maybe.fromMaybe ("",LitTrue)) mLics
 
         tducrels
-            | mTDucRels == empty    = Data.Set.map (makeFaithfulTDucRel csize) sig
-            | otherwise             = Data.Set.unions [fullyDefined, fromNothing, fromPartial]
+            | mTDucRels == S.empty    = S.map (makeFaithfulTDucRel csize) sig
+            | otherwise             = S.unions [fullyDefined, fromNothing, fromPartial]
 
-        definedNames = Data.Set.map relationName mTDucRels
-        definedSigRs = Data.Set.filter (\sigr -> sigRname sigr `member` definedNames) sig
+        definedNames = S.map relationName mTDucRels
+        definedSigRs = S.filter (\sigr -> sigRname sigr `S.member` definedNames) sig
 
-        (fullyDefined,partialDefined) = Data.Set.partition isValidTDucRelation mTDucRels
-        fromNothing = Data.Set.map (makeFaithfulTDucRel csize) (Data.Set.filter (\s -> not (member s definedSigRs)) sig)
-        fromPartial = Data.Set.map fillIn partialDefined
+        (fullyDefined,partialDefined) = S.partition isValidTDucRelation mTDucRels
+        fromNothing = S.map (makeFaithfulTDucRel csize) (S.filter (\s -> not (S.member s definedSigRs)) sig)
+        fromPartial = S.map fillIn partialDefined
 
         fillIn :: TDucRelation -> TDucRelation
-        fillIn (TDucRelation relnm fmlas) = if Prelude.null fmlas then makeFaithfulTDucRel csize sigRel else
+        fillIn (TDucRelation relnm fmlas) = if null fmlas then makeFaithfulTDucRel csize sigRel else
                                             TDucRelation relnm (first:rest)
             where
-                sigRel = Data.Set.elemAt 0 (Data.Set.filter (\s -> sigRname s == relnm) sig)
+                sigRel = S.elemAt 0 (S.filter (\s -> sigRname s == relnm) sig)
                 first = Data.Maybe.fromMaybe (makeRelMap fthflFmla ones) (find' ones)
-                rest = Prelude.map (fillRest (if ar == 1 then fthflFmla else LitFalse)) (tail allMps)
+                rest = map (fillRest (if ar == 1 then fthflFmla else LitFalse)) allMps
 
                 ar = arity sigRel
                 ones = replicate ar 1
                 find' csetArgs = find (\rel -> fst (mapping rel) == csetArgs) fmlas
-                allMps = sequence (replicate (arity sigRel) [1..csize])
+                allMps = case Control.Monad.replicateM (arity sigRel) [1..csize] of
+                    [] -> []
+                    _:mPs -> mPs
                 (relArgs,fthflFmla) = makeFaithfulMSOFormula sigRel
                 makeRelMap :: MSOFormula -> [Int] -> TDucRelMapping
                 makeRelMap msoFmla csetArgs = TDucRelMapping relArgs (csetArgs, msoFmla)
@@ -74,7 +77,7 @@ fillTDucColOrdPresrv :: Recipe
 fillTDucColOrdPresrv ordrRels (ProcessedTDuc sig dom csize mLics mTDucRels) = result
     where
         result = fillTransductionFaithful [] (ProcessedTDuc sig dom csize lics resTDucRels)
-        lics = Prelude.map (\f -> Just ("(licV)", f)) licFmlas
+        lics = map (\f -> Just ("(licV)", f)) licFmlas
         licFmlas = getLics mLics
         getLics :: [Maybe (String, MSOFormula)] -> [MSOFormula]
         getLics [] = []
@@ -83,24 +86,24 @@ fillTDucColOrdPresrv ordrRels (ProcessedTDuc sig dom csize mLics mTDucRels) = re
             Just (_, fmla) -> fmla : getLics ls
 
         orders = makeOrders ordrRels
-        makeOrders :: [String] -> Set StringOrder
-        makeOrders [] = 
+        makeOrders :: [String] -> S.Set StringOrder
+        makeOrders [] =
             procError "Column order preservation requires at least one order to preserve"
-        makeOrders [_] = 
+        makeOrders [_] =
             procError ("Column order preservation requires a list of orders of the form: " ++
                         "{ordTyp1}, {relName1}, {ordTyp2}, {relName2}...")
         makeOrders [ordTyp, relName] = makeOneOrder ordTyp relName
-        makeOrders (ordTyp:(relName:rest)) = makeOneOrder ordTyp relName `union` makeOrders rest
-        makeOneOrder typ nm 
-            | nm `notElem` sigRNames = procError ("Column order preservation given " ++ 
+        makeOrders (ordTyp:(relName:rest)) = makeOneOrder ordTyp relName `S.union` makeOrders rest
+        makeOneOrder typ nm
+            | nm `notElem` sigRNames = procError ("Column order preservation given " ++
                 "non-existent relation name: " ++ nm)
-            | typ == "succ" = singleton (StringOrder nm SuccOrder [])
-            | typ == "prec" = singleton (StringOrder nm PrecOrder [])
-            | otherwise     = procError ("Valid order types for column order preservation" ++ 
+            | typ == "succ" = S.singleton (StringOrder nm SuccOrder [])
+            | typ == "prec" = S.singleton (StringOrder nm PrecOrder [])
+            | otherwise     = procError ("Valid order types for column order preservation" ++
                 "are \"succ\" or \"prec\"; given: " ++ typ)
-        sigRNames = Data.Set.map sigRname sig
-        resTDucRels = mTDucRels `union` ordTDucRels
-        ordTDucRels = Data.Set.map (\ordr -> makeColOrdPresrvTDucRel csize ordr ("(licV)", licFmlas)) orders
+        sigRNames = S.map sigRname sig
+        resTDucRels = mTDucRels `S.union` ordTDucRels
+        ordTDucRels = S.map (\ordr -> makeColOrdPresrvTDucRel csize ordr ("(licV)", licFmlas)) orders
 
 
 strictCheck :: Recipe
@@ -147,15 +150,15 @@ makeColOrdPresrvTDucRel csetsz (StringOrder rname ordTyp _) (licVar, lics) = TDu
                 oneOne = TDucRelMapping relArgs ([1,1], And (Rel resName relArgs) (noneBelow 1))
                 downs = [TDucRelMapping relArgs ([n1,n2], And (Equals a b) (noneAboveBetween n1 n2)) |
                             n1 <- [1..csetsz-1], n2 <- [2..csetsz], n1 < n2]
-                toOne = Prelude.map (\n -> TDucRelMapping relArgs ([n,1], And (Rel resName relArgs) (noneBelow n)))
+                toOne = map (\n -> TDucRelMapping relArgs ([n,1], And (Rel resName relArgs) (noneBelow n)))
                                     [2..csetsz]
                 samesUp = [TDucRelMapping relArgs ([n1,n2], LitFalse) | n1 <- [2..csetsz], n2 <- [2..csetsz], n1 >= n2]
                 noneBelow :: Int -> MSOFormula
-                noneBelow n = Prelude.foldl And LitTrue (Prelude.map Not (Prelude.drop n lics))
+                noneBelow n = foldl And LitTrue (map Not (drop n lics))
                 noneAboveBetween :: Int -> Int -> MSOFormula
-                noneAboveBetween highr lowr = Prelude.foldl And LitTrue (Prelude.map Not theLics)
+                noneAboveBetween highr lowr = foldl And LitTrue (map Not theLics)
                     where
-                        theLics = Prelude.take ((lowr - highr)-1) (Prelude.drop highr lics)
+                        theLics = take ((lowr - highr)-1) (drop highr lics)
         forPrec = downs ++ samesUp
             where
                 downs = [lookingDown n1 n2 | n1 <- [1..csetsz], n2 <- [2..csetsz], n2 > n1]
@@ -181,4 +184,34 @@ makeFaithfulTDucRel csetsz sigr@(SigRelation rname ar) = TDucRelation rname fmla
         fmlas = if ar==1 then [TDucRelMapping relArgs ([mp1], fmla) | mp1 <- [1..csetsz]] else first:rest
             where
                 first = TDucRelMapping relArgs (replicate ar 1, fmla) --all from 1st copy set
-                rest = tail [TDucRelMapping relArgs (mp, LitFalse) | mp <- sequence (replicate ar [1..csetsz])]
+                rest = case [TDucRelMapping relArgs (mp, LitFalse) | mp <- Control.Monad.replicateM ar [1..csetsz]] of
+                    [] -> []
+                    _:rst -> rst
+
+
+
+isValidTDucRelation :: TDucRelation -> Bool
+--DOES NOT CHECK THAT MSOFORMULAS ARE VALID (e.g. with regard to free variables)
+isValidTDucRelation (TDucRelation _ relMaps) = case relMaps of
+    [] -> False
+    fmlas@(headFmla:rest) -> consistentArity && consistentCSetSize
+        where
+            consistentArity = headArgArity == headMapArity && argsMatch && mapsMatch
+            consistentCSetSize = totalNumCorrect && noDuplicates
+
+            headArgArity = getArgArity headFmla
+            headMapArity = length (getSetMapping headFmla)
+            argsMatch = all (\args -> getArgArity args == headArgArity) rest
+            mapsMatch = all (\relMap -> length (getSetMapping relMap) == headMapArity) rest
+
+            totalNumCorrect = length setMappings == topCSet ^ headArgArity
+            noDuplicates = S.size (S.fromList setMappings) == length setMappings
+            
+            setMappings = map getSetMapping fmlas
+            topCSet = maximum (map maximum setMappings)
+            
+            getSetMapping :: TDucRelMapping -> [Int]
+            getSetMapping = fst . mapping
+            
+            getArgArity :: TDucRelMapping -> Int
+            getArgArity = length . relArguments

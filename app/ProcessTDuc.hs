@@ -1,28 +1,11 @@
 module ProcessTDuc (getTransduction) where
 
-import Data.Set
+import qualified Data.Set as S
 import Data.List (delete, partition, sortBy)
 import Data.Maybe (fromMaybe)
 import TDucParser
 import Recipes
-import Types (
-    --Intermediate Types for Parsing
-    ParsedTDuc(..),
-    RecipeCall(..),
-    ProcessedTDuc(..),
-    FormulaVar(..),
-    FormulaDef(..),
-    LicDef(..),
-    RelMappingDef(..),
-    --Transductions and Their Component Types-
-    Transduction (..),
-    SigRelation(..),
-    Signature,
-    MSOFormula(..),
-    TDucRelMapping(..),
-    TDucRelation(..),
-    TDucRelation(..),
-    )
+import Types
 
 
 getTransduction :: String -> Transduction
@@ -85,8 +68,8 @@ deSugarUserPreds (ParsedTDuc recs sig fdefs dom cset lics rels) = result
         dom' = case dom of
             Nothing -> Nothing
             Just fmla -> Just (deSugar' fmla)
-        lics' = Prelude.map deSugarLic lics
-        rels' = Prelude.map deSugarRel rels
+        lics' = map deSugarLic lics
+        rels' = map deSugarRel rels
         deSugarLic (LicDef lArg lMap lBody) = LicDef lArg lMap (deSugar' lBody)
         deSugarRel (RelMappingDef rN rA rM relBody) = RelMappingDef rN rA rM (deSugar' relBody)
 
@@ -94,14 +77,14 @@ makeSig :: ParsedTDuc -> Signature
 --Do only after desugaring the user predicates!
 makeSig (ParsedTDuc _ sig _ dom _ lics rels) = sig'
     where
-        sig' = if sig /= [] then fromList sig else fromBodies `union` fromRelDefs
-        fromBodies = Prelude.foldr (union . getFormulaSignature) empty allFmlas
-        fromRelDefs = fromList (Prelude.map relDefToSigR rels)
+        sig' = if sig /= [] then S.fromList sig else fromBodies `S.union` fromRelDefs
+        fromBodies = foldr (S.union . getFormulaSignature) S.empty allFmlas
+        fromRelDefs = S.fromList (map relDefToSigR rels)
 
         allFmlas = domFmla : (licFmlas ++ relFmlas)
         domFmla = fromMaybe LitFalse dom
-        licFmlas = Prelude.map licDefBody lics
-        relFmlas = Prelude.map relDefBody rels
+        licFmlas = map licDefBody lics
+        relFmlas = map relDefBody rels
 
         relDefToSigR :: RelMappingDef -> SigRelation
         relDefToSigR (RelMappingDef nm args _ _) = SigRelation nm (length args)
@@ -123,13 +106,13 @@ makeLicList (ParsedTDuc _ _ _ _ csetsz lics _ ) = result
             where
                 normedBody = replaceVars [(arg, "(licV)")] body
 
-makeTDucRels :: ParsedTDuc -> Set TDucRelation
+makeTDucRels :: ParsedTDuc -> S.Set TDucRelation
 makeTDucRels (ParsedTDuc _ _ _ _ csetsz _ rels) = result
     where
-        result = fromList (Prelude.map makeTDucRelation (splitByName [] rels))
+        result = S.fromList (map makeTDucRelation (splitByName [] rels))
         makeTDucRelation :: [RelMappingDef] -> TDucRelation
         makeTDucRelation [] = undefined --Impossible state based on how splitByName works
-        makeTDucRelation (r:rs) = TDucRelation (relDefName r) (Prelude.map makeTDucRMap (r:rs))
+        makeTDucRelation (r:rs) = TDucRelation (relDefName r) (map makeTDucRMap (r:rs))
             where
                 makeTDucRMap (RelMappingDef rName rArgs rMap rBody) = case rMap of
                     [] -> if csetsz == 1 then TDucRelMapping rArgs (rep rArgs, rBody)
@@ -152,24 +135,24 @@ makeTDucRels (ParsedTDuc _ _ _ _ csetsz _ rels) = result
 getFormulaSignature :: MSOFormula -> Signature
 --Given an MSOFormula, determine the minimum Signature that formula is valid for
 getFormulaSignature fmla = case fmla of
-    Rel relName relParams -> singleton (SigRelation relName (length relParams))
+    Rel relName relParams -> S.singleton (SigRelation relName (length relParams))
     Not f -> getFormulaSignature f
     Exists _ f -> getFormulaSignature f
     Exists2 _ f -> getFormulaSignature f
     Forall _ f -> getFormulaSignature f
     Forall2 _ f -> getFormulaSignature f
-    And f1 f2 -> getFormulaSignature f1 `union` getFormulaSignature f2
-    Or f1 f2 -> getFormulaSignature f1 `union` getFormulaSignature f2
-    Implies f1 f2 -> getFormulaSignature f1 `union` getFormulaSignature f2
-    Iff f1 f2 -> getFormulaSignature f1 `union` getFormulaSignature f2
-    _ -> empty
+    And f1 f2 -> getFormulaSignature f1 `S.union` getFormulaSignature f2
+    Or f1 f2 -> getFormulaSignature f1 `S.union` getFormulaSignature f2
+    Implies f1 f2 -> getFormulaSignature f1 `S.union` getFormulaSignature f2
+    Iff f1 f2 -> getFormulaSignature f1 `S.union` getFormulaSignature f2
+    _ -> S.empty
 
 
 replaceVars :: [(String, String)] -> MSOFormula -> MSOFormula
 replaceVars vars fmla = case fmla of
     Equals v1 v2 -> Equals (doVarMap vars v1) (doVarMap vars v2)
     ElemOf v1 v2 -> ElemOf (doVarMap vars v1) (doVarMap vars v2)
-    Rel relName relParams -> Rel relName (Prelude.map (doVarMap vars) relParams)
+    Rel relName relParams -> Rel relName (map (doVarMap vars) relParams)
     Not f -> Not (replaceVars vars f)
     Exists a f -> Exists a (replaceVars vars f)
     Exists2 a f -> Exists2 a (replaceVars vars f)
@@ -207,7 +190,7 @@ deSugarMSOBody fdefs fmla = case fmla of
         findFDef relName relParams [] = Rel relName relParams
         findFDef relName relParams ((FormulaDef name args body):rest) =
             if relName /= name then findFDef relName relParams rest
-            else replaceVars (zip (Prelude.map getFVar args) relParams) body
+            else replaceVars (zip (map getFVar args) relParams) body
 
 
 deSugarFormulas :: [FormulaDef] -> [FormulaDef]
@@ -217,12 +200,12 @@ deSugarFormulas allFormulas = result
         result = case sorted of
             Nothing -> procError "Cyclic dependency or recursion found in user-defined predicates"
             Just fdefs -> deSugarAll [] fdefs
-        names = fromList (Prelude.map fmlaName allFormulas)
+        names = S.fromList (map fmlaName allFormulas)
         sorted = sortFormulasByUse names [] allFormulas
-        sortFormulasByUse :: Set String -> [FormulaDef] -> [FormulaDef] -> Maybe [FormulaDef]
+        sortFormulasByUse :: S.Set String -> [FormulaDef] -> [FormulaDef] -> Maybe [FormulaDef]
         sortFormulasByUse _ acc [] = Just (reverse acc)
         sortFormulasByUse banned acc fmlas = case getOneFormula fmlas of
-            Just fmla -> sortFormulasByUse (Data.Set.delete (fmlaName fmla) banned) (fmla:acc) (Data.List.delete fmla fmlas)
+            Just fmla -> sortFormulasByUse (S.delete (fmlaName fmla) banned) (fmla:acc) (Data.List.delete fmla fmlas)
             Nothing -> Nothing
             where
             getOneFormula :: [FormulaDef] -> Maybe FormulaDef
@@ -232,9 +215,9 @@ deSugarFormulas allFormulas = result
                 |  noRely = Just fmla
                 |  otherwise = getOneFormula rest
                 where
-                    noRely = disjoint banned rNames
-                    rNames = Data.Set.map sigRname (getFormulaSignature (fmlaBody fmla))
-                    selfLoop = fmlaName fmla `member` rNames
+                    noRely = S.disjoint banned rNames
+                    rNames = S.map sigRname (getFormulaSignature (fmlaBody fmla))
+                    selfLoop = fmlaName fmla `S.member` rNames
         deSugarAll :: [FormulaDef] -> [FormulaDef] -> [FormulaDef]
         deSugarAll acc [] = acc
         deSugarAll acc (cur:rest) = deSugarAll acc' rest
@@ -256,17 +239,17 @@ checkValidTransduction (Transduction sig dom csize lics rels)
     | otherwise = True
     where
         validRelationMaps = all checkValidTDucRelation rels
-        hasDuplicates = size rels /= size (Data.Set.map relationName rels)
+        hasDuplicates = S.size rels /= S.size (S.map relationName rels)
         licsInconsistent = length lics /= csize
-        relsInconsistent = any (/=csize) (Data.Set.map getTDucRelCSetSize rels)
-        exhaustSig = size sig /= size rels
-        matchesSig = (`isSubsetOf` sig) . getFormulaSignature
+        relsInconsistent = any (/=csize) (S.map getTDucRelCSetSize rels)
+        exhaustSig = S.size sig /= S.size rels
+        matchesSig = (`S.isSubsetOf` sig) . getFormulaSignature
         domMatchesSig = matchesSig dom
         licsMatchSig = all (matchesSig . snd) lics
-        relMapsMatchSig = all (all (matchesSig . snd . mapping)) (Data.Set.map formulas rels)
-        getTDucRelCSetSize (TDucRelation _ fmlas) = maximum (Prelude.map maximum setMappings)
+        relMapsMatchSig = all (all (matchesSig . snd . mapping)) (S.map formulas rels)
+        getTDucRelCSetSize (TDucRelation _ fmlas) = maximum (map maximum setMappings)
             where
-                setMappings = Prelude.map (fst . mapping) fmlas
+                setMappings = map (fst . mapping) fmlas
 
 checkValidTDucRelation :: TDucRelation -> Bool
 --DOES NOT CHECK THAT MSOFORMULAS ARE VALID (e.g. with regard to free variables)
@@ -284,13 +267,13 @@ checkValidTDucRelation (TDucRelation rName fmlas@(headFmla:rest))
         argsDontMatch = any (\args -> getArgArity args /= headArgArity) rest
         mapsDontMatch = any (\relMap -> length (getSetMapping relMap) /= headMapArity) rest
         totalNumWrong = length setMappings /= topCSet ^ headArgArity
-        hasDuplicates = size (fromList setMappings) /= length setMappings
+        hasDuplicates = S.size (S.fromList setMappings) /= length setMappings
         
         headArgArity = getArgArity headFmla
         headMapArity = length (getSetMapping headFmla)
         
-        setMappings = Prelude.map getSetMapping fmlas
-        topCSet = maximum (Prelude.map maximum setMappings)
+        setMappings = map getSetMapping fmlas
+        topCSet = maximum (map maximum setMappings)
         
         getSetMapping :: TDucRelMapping -> [Int]
         getSetMapping = fst . mapping

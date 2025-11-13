@@ -30,10 +30,7 @@ module Types (
     ProcessedStrucsFile(..),
 --Types for Other Utilities--
     AlphaMapRule,
-    AlphaMapTable(..),
-
---Type Validity Checking Functions
-    isValidTDucRelation
+    AlphaMapTable(..)
 ) where
 import Data.Set
 
@@ -245,38 +242,6 @@ data AlphaMapTable = AlphaMapTable {
     mapRules :: [AlphaMapRule],
     defaultSymbol :: String
 } deriving Show
-
-
-
--------------------------------------------------------------------------------
------------------------Type Validity Checking Functions------------------------
--------------------------------------------------------------------------------
-
-isValidTDucRelation :: TDucRelation -> Bool
---DOES NOT CHECK THAT MSOFORMULAS ARE VALID (e.g. with regard to free variables)
-isValidTDucRelation (TDucRelation _ relMaps) = case relMaps of
-    [] -> False
-    fmlas@(headFmla:rest) -> consistentArity && consistentCSetSize
-        where
-            consistentArity = headArgArity == headMapArity && argsMatch && mapsMatch
-            consistentCSetSize = totalNumCorrect && noDuplicates
-
-            headArgArity = getArgArity headFmla
-            headMapArity = length (getSetMapping headFmla)
-            argsMatch = all (\args -> getArgArity args == headArgArity) rest
-            mapsMatch = all (\relMap -> length (getSetMapping relMap) == headMapArity) rest
-
-            totalNumCorrect = length setMappings == topCSet ^ headArgArity
-            noDuplicates = size (fromList setMappings) == length setMappings
-            
-            setMappings = Prelude.map getSetMapping fmlas
-            topCSet = maximum (Prelude.map maximum setMappings)
-            
-            getSetMapping :: TDucRelMapping -> [Int]
-            getSetMapping = fst . mapping
-            
-            getArgArity :: TDucRelMapping -> Int
-            getArgArity = length . relArguments
 
             
 

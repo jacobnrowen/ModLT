@@ -1,2 +1,7 @@
 /cabal.project.local
 /dist-newstyle
+StrucLexer.hs
+StrucParser.hs
+TDucLexer.hs
+TDucParser.hs
+*.info
