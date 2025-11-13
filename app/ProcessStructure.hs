@@ -102,9 +102,10 @@ transduceStruc tduc strucSig (struc, orders) = result
 
 stringToStruc :: AlphaMapTable -> String -> OrderedStructure
 --Assumes string has spaces between each element
+--If structure has exactly one element, makes placeholder starting and ending elements to prevent confusion
 stringToStruc table str = (Structure numElem rels, orders)
     where
-        symbls = words str
+        symbls = if length (words str) /= 1 then words str else ["",str,""]
         numElem = length symbls
         unaries = mapFromAlpha table symbls
         succRel = buildSuccishRel "*" [1..numElem]
