@@ -76,7 +76,7 @@ processParsedStrucs (ParsedStrucsFile sig alphaTbl strucs) = ProcessedStrucsFile
         handleFullDef sz rels = Structure sz' rels'
             where
                 sz' = fromMaybe maxDomElem sz
-                maxDomElem = if S.size allRMems /= 0 then maximum (S.map maximum allRMems) else 0
+                maxDomElem = getStrucSize allRMems
                 allRMems = foldr S.union S.empty (S.map members rels')
                 rels' = S.fromList (map makeStrucR rels)
                 makeStrucR (nm, rmems) = StrucRelation nm (S.fromList rmems)
@@ -242,9 +242,10 @@ applyTransduction :: Transduction -> Structure -> Structure
 --The resulting structure has domain elements equal to the size of the input structure times the copy set size, and
 --   the elements are ennumerated accordingly
 --ASSUMES TRANSDUCTION CAN APPLY
-applyTransduction (Transduction _ _ csize lics tducRels) struc@(Structure numElem _) = resultStruc
+applyTransduction (Transduction _ _ _ lics tducRels) struc@(Structure numElem _) = resultStruc
     where
-        resultStruc = Structure (csize * numElem) visRels
+        resultStruc = Structure resultSize visRels
+        resultSize = if S.size visRels == 0 then 0 else maximum (S.map (getStrucSize . members) visRels)
         visRels = S.map computeRel tducRels
 
         --Check license functions
@@ -346,7 +347,7 @@ satisfied quantifier args struc = case quantifier of
     Exists2 var formula -> satisfyMQuantifier var formula maxSet True
     Forall2 var formula -> satisfyMQuantifier var formula maxSet False
     where
-        maxElement = numElements struc - 1
+        maxElement = numElements struc
         powSet = S.powerSet (S.fromList [0..maxElement])
         maxSet = S.size powSet - 1
 
@@ -406,7 +407,7 @@ getStructureError (Structure numElem rels) = strucError
                     | invalidElems = "Error: domain element out of size range in relation " ++ nm
                     | otherwise    = ""
                 unequalArity  = any ((/= getArity mems) . length) mems
-                invalidElems  = S.size mems /= 0 && maximum (S.map maximum mems) > numElem
+                invalidElems  = getStrucSize mems > numElem
 
 
 strucMatchesSig :: Structure -> Signature -> Bool
@@ -417,3 +418,6 @@ strucMatchesSig (Structure _ rels) sig = all (\strucR -> any (strucRmatchesSigR 
         strucRmatchesSigR (StrucRelation strucN m) (SigRelation sigN ar) = case S.toList m of
             [] -> True  --if the relation contains nothing, it vacuously matches the signature
             (s1:_) -> strucN == sigN && length s1 == ar  --the name and arity must match
+
+getStrucSize :: S.Set RMember -> Int
+getStrucSize mems = if S.size mems /= 0 then maximum (S.map maximum mems) else 0

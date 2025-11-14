@@ -1,12 +1,22 @@
-Signature { a(_) b(_) *(_,_) <(_,_) }
+#Recipes { faithful() }
+Signature {  
+    vocalic(_) high(_) low(_) front(_) round(_) consanantal(_)
+    *(_,_) <(_,_)
+}
 
-DOM := true
+Formulas {
+    a(x) := vocalic(x) && low(x) && ~round(x)
+}
+
+DOM := \E(x)[vocalic(x)]
 CSET := 1
 
-LIC(x)(1) := true
+LIC(x) := true
 
-a(x)(1) := b(x)
-b(x)(1) := a(x)
+high(v) := high(v) || a(v)
+low(v) := low(v) && round(v)
+front(v) := high(v) || a(v)
+round(v) := false
 
-*(x,y)(1,1) := x * y
-<(x,y)(1,1) := x < y
+
+

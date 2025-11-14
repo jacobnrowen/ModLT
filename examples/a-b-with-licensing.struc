@@ -1,0 +1,13 @@
+AllLicensed {
+    a
+    [[1]]
+    b
+    [[2]]
+}
+
+NotAllLicensed {
+    a
+    [[3]]
+    b
+    [[1], [2], [3]]
+}

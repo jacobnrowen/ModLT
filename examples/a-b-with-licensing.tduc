@@ -1,0 +1,6 @@
+DOM := true
+
+LIC(x) := (a(x) || b(x)) && ~(a(x) && b(x))
+
+a(x) := b(x)
+b(x) := a(x)
